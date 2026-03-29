@@ -15,7 +15,7 @@ import plotly.graph_objects as go
 import pandas as pd
 
 from config import settings
-from db.database import init_db, get_db_stats
+from db.database import init_db, get_db_stats, get_session
 from utils.data_processor import (
     get_genre_stats_df,
     get_trend_history_df,
