@@ -1,5 +1,5 @@
 """
-app.py — DropRate Dashboard — Steam-style right filter panel
+app.py — DropRate Dashboard
 """
 import streamlit as st
 import plotly.express as px
@@ -43,24 +43,22 @@ section[data-testid="stSidebar"] { display: none !important; }
 [data-testid="stMetricDelta"] svg { display: none; }
 .stButton button { background: #6366f1 !important; color: white !important; border: none !important; border-radius: 8px !important; font-weight: 600 !important; padding: 8px 16px !important; font-size: 13px !important; }
 .stButton button:hover { background: #4f46e5 !important; }
-.stCheckbox label { color: #94a3b8 !important; font-size: 13px !important; }
 .stMultiSelect [data-baseweb="select"] > div,
 .stSelectbox [data-baseweb="select"] > div { background: #1e2130 !important; border-color: #2d3348 !important; }
 .stMultiSelect span { background: #312e81 !important; color: #c7d2fe !important; }
-.streamlit-expanderHeader { background: #1a1f2e !important; border: none !important; border-bottom: 1px solid #2d3348 !important; border-radius: 0 !important; color: #c8d0e0 !important; font-size: 11px !important; font-weight: 700 !important; letter-spacing: 0.08em !important; text-transform: uppercase !important; padding: 10px 12px !important; }
-.streamlit-expanderContent { background: #1a1f2e !important; border: none !important; border-bottom: 1px solid #2d3348 !important; padding: 8px 12px !important; }
+.streamlit-expanderHeader { background: #1a1f2e !important; border-bottom: 1px solid #2d3348 !important; color: #c8d0e0 !important; font-size: 11px !important; font-weight: 700 !important; letter-spacing: 0.08em !important; text-transform: uppercase !important; }
+.streamlit-expanderContent { background: #1a1f2e !important; border-bottom: 1px solid #2d3348 !important; }
 .stDataFrame { border-radius: 10px !important; overflow: hidden !important; }
 .stProgress > div > div > div { background: #6366f1 !important; }
 .stChatMessage { background: #1e2130 !important; border: 1px solid #2d3348 !important; border-radius: 12px !important; }
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: #0f1117; }
 ::-webkit-scrollbar-thumb { background: #2d3348; border-radius: 4px; }
-.filter-section-title { font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 0.14em; text-transform: uppercase; padding: 6px 0; border-bottom: 1px solid #2d3348; margin-bottom: 8px; }
+.panel-title { font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 0.14em; text-transform: uppercase; padding: 6px 0; border-bottom: 1px solid #2d3348; margin-bottom: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
 # ── Init ──────────────────────────────────────────────────────────────────────
-@st.cache_resource
 def initialize():
     init_db()
     stats = get_db_stats()
@@ -68,37 +66,21 @@ def initialize():
         from utils.seed import seed_games, seed_genre_trends
         seed_games(20)
         seed_genre_trends(30)
-    return True
-initialize()
+    return get_db_stats()
 
 @st.cache_data(ttl=60)
 def get_fresh_stats():
     return get_db_stats()
 
-db_stats = get_fresh_stats()
-
-# ── Session State ─────────────────────────────────────────────────────────────
-ALL_GENRES = ["Roguelite","Cozy","Survival","Horror","Idle","Puzzle","Visual Novel","Platformer","RPG","Action","Strategy","Simulation"]
-if "selected_genres" not in st.session_state:
-    st.session_state.selected_genres = list(ALL_GENRES)
-
 # ── Cache ─────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=1800)
 def load_genre_stats(): return get_genre_stats_df()
 @st.cache_data(ttl=1800)
-def load_trend_history(days=30): return get_trend_history_df(days=days)
+def load_trend_history(): return get_trend_history_df(days=30)
 @st.cache_data(ttl=1800)
 def load_top_games(): return get_top_games_df(limit=20)
 @st.cache_data(ttl=600)
 def load_market_context(): return get_market_context()
-
-def filter_by_genre(df, col="genre"):
-    if df.empty or col not in df.columns:
-        return df
-    sel = st.session_state.selected_genres
-    if not sel or set(sel) == set(ALL_GENRES):
-        return df
-    return df[df[col].isin(sel)]
 
 # ── Plotly ────────────────────────────────────────────────────────────────────
 BG = "rgba(0,0,0,0)"
@@ -114,167 +96,132 @@ def dark_layout(**kw):
     return base
 
 # ══════════════════════════════════════════════════════════════════════════════
-# LAYOUT — treść (lewo) | panel filtrów (prawo)
+# LAYOUT
 # ══════════════════════════════════════════════════════════════════════════════
-main_col, filter_col = st.columns([5, 1], gap="large")
+main_col, side_col = st.columns([5, 1], gap="large")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PRAWY PANEL — Filtry + Dane
+# PRAWY PANEL — tylko zarządzanie danymi
 # ─────────────────────────────────────────────────────────────────────────────
-with filter_col:
-    st.markdown(f"<div style='text-align:right;font-size:11px;color:#64748b;margin-bottom:6px'>🟢 {db_stats['games']:,} gier</div>", unsafe_allow_html=True)
+with side_col:
+    db_stats = get_fresh_stats()
+    st.markdown(f"<div style='font-size:11px;color:#64748b;margin-bottom:8px'>🟢 {db_stats['games']:,} gier</div>", unsafe_allow_html=True)
 
-    # ── FILTRY ────────────────────────────────────────────────────────────────
-    st.markdown("<div class='filter-section-title'>FILTRY</div>", unsafe_allow_html=True)
+    st.markdown("<div class='panel-title'>DANE</div>", unsafe_allow_html=True)
 
-    with st.expander("GATUNKI", expanded=True):
-        genre_checks = {}
-        for genre in ALL_GENRES:
-            genre_checks[genre] = st.checkbox(
-                genre,
-                value=(genre in st.session_state.selected_genres),
-                key=f"chk_{genre}"
-            )
+    from scrapers.steam import GENRE_TO_TAG
+    dl_genres = st.multiselect(
+        "Gatunki",
+        options=list(GENRE_TO_TAG.keys()),
+        default=["Roguelite","Cozy","Survival","Horror"],
+        key="dl_genres"
+    )
 
-    col_a, col_b = st.columns(2)
-    with col_a:
-        if st.button("✅", use_container_width=True, help="Zastosuj filtry"):
-            new_sel = [g for g, v in genre_checks.items() if v]
-            st.session_state.selected_genres = new_sel if new_sel else list(ALL_GENRES)
-            st.cache_data.clear()
-            st.rerun()
-    with col_b:
-        if st.button("↺", use_container_width=True, help="Reset filtrów"):
-            st.session_state.selected_genres = list(ALL_GENRES)
-            st.cache_data.clear()
-            st.rerun()
+    if st.button("🌱 Dane demo", use_container_width=True):
+        with st.spinner("Ładuję..."):
+            from utils.seed import seed_games, seed_genre_trends
+            from db.models import Game, GenreTrend
+            with get_session() as db:
+                db.query(GenreTrend).delete()
+                db.query(Game).delete()
+            seed_games(20)
+            seed_genre_trends(30)
+        st.success("✅ Załadowano!")
+        st.cache_data.clear()
+        st.rerun()
 
-    sel_count = len(st.session_state.selected_genres)
-    if sel_count < len(ALL_GENRES):
-        st.caption(f"🔍 {sel_count}/{len(ALL_GENRES)}")
+    if st.button("🔄 Pobierz Steam", use_container_width=True):
+        if not dl_genres:
+            st.warning("Wybierz gatunki!")
+        else:
+            from scrapers.steam import fetch_genre_data
+            from db.models import Game, GenreTrend
+            from datetime import datetime, timezone
 
-    # ── DANE ──────────────────────────────────────────────────────────────────
-    st.divider()
-    st.markdown("<div class='filter-section-title'>DANE</div>", unsafe_allow_html=True)
+            prog = st.progress(0)
+            stat = st.empty()
+            saved = 0
+            buckets = {}
 
-    with st.expander("Zarządzaj danymi", expanded=False):
-        from scrapers.steam import GENRE_TO_TAG
-        dl_genres = st.multiselect(
-            "Gatunki do pobrania",
-            options=list(GENRE_TO_TAG.keys()),
-            default=["Roguelite","Cozy","Survival","Horror"],
-            key="dl_genres"
-        )
+            for i, genre in enumerate(dl_genres):
+                stat.text(f"{genre}...")
+                try:
+                    games = fetch_genre_data(genre, pages=1)
+                    for g in games:
+                        try:
+                            with get_session() as db:
+                                ex = db.query(Game).filter_by(app_id=g["app_id"]).first()
+                                if ex:
+                                    ex.owners_min = g.get("owners_min",0)
+                                    ex.owners_max = g.get("owners_max",0)
+                                    ex.positive   = g.get("positive",0)
+                                    ex.negative   = g.get("negative",0)
+                                    ex.price_usd  = int(g.get("price_usd",0) or 0)
+                                else:
+                                    db.add(Game(
+                                        app_id=g["app_id"], name=g["name"],
+                                        developer=g.get("developer",""), publisher=g.get("publisher",""),
+                                        owners_min=g.get("owners_min",0), owners_max=g.get("owners_max",0),
+                                        players_forever=g.get("players_forever",0),
+                                        average_playtime=g.get("average_playtime",0),
+                                        median_playtime=g.get("median_playtime",0),
+                                        price_usd=int(g.get("price_usd",0) or 0),
+                                        positive=g.get("positive",0), negative=g.get("negative",0),
+                                        tags=g.get("tags",{}),
+                                    ))
+                                saved += 1
+                        except Exception:
+                            pass
+                except Exception as e:
+                    stat.text(f"✗ {e}")
+                prog.progress((i+1)/(len(dl_genres)+1))
 
-        if st.button("🌱 Dane demo", use_container_width=True):
-            with st.spinner("Ładuję dane demo..."):
-                from utils.seed import seed_games, seed_genre_trends
-                from db.models import Game, GenreTrend
+            stat.text("Obliczam trendy...")
+            try:
                 with get_session() as db:
                     db.query(GenreTrend).delete()
-                    db.query(Game).delete()
-                seed_games(20)
-                seed_genre_trends(30)
-            st.success("✅ Załadowano!")
+                    all_g = db.query(Game).filter(Game.owners_max > 0).all()
+                    for game in all_g:
+                        gn = _classify_genre(game.tags or {})
+                        buckets.setdefault(gn, []).append(game)
+                    now = datetime.now(timezone.utc)
+                    for gn, gg in buckets.items():
+                        own = [x.owners_mid for x in gg]
+                        rev = [x.estimated_revenue for x in gg]
+                        rw  = [x.review_score for x in gg if x.positive+x.negative > 0]
+                        db.add(GenreTrend(
+                            genre=gn, recorded_at=now, game_count=len(gg),
+                            avg_owners=int(sum(own)/len(own)) if own else 0,
+                            total_owners=sum(own),
+                            avg_revenue=sum(rev)/len(rev) if rev else 0.0,
+                            avg_review_score=sum(rw)/len(rw) if rw else 0.0,
+                            avg_playtime_h=sum(x.average_playtime/60 for x in gg)/len(gg),
+                            avg_price=sum(x.price_usd for x in gg)/len(gg),
+                        ))
+            except Exception as e:
+                st.error(f"Błąd: {e}")
+
+            prog.progress(1.0)
+            st.success(f"✅ {saved} gier")
             st.cache_data.clear()
             st.rerun()
 
-        if st.button("🔄 Pobierz Steam", use_container_width=True):
-            if not dl_genres:
-                st.warning("Wybierz gatunki!")
-            else:
-                from scrapers.steam import fetch_genre_data
-                from db.models import Game, GenreTrend
-                from datetime import datetime, timezone
-
-                prog = st.progress(0)
-                stat = st.empty()
-                saved = 0
-                buckets = {}
-
-                for i, genre in enumerate(dl_genres):
-                    stat.text(f"{genre}...")
-                    try:
-                        games = fetch_genre_data(genre, pages=1)
-                        for g in games:
-                            try:
-                                with get_session() as db:
-                                    ex = db.query(Game).filter_by(app_id=g["app_id"]).first()
-                                    if ex:
-                                        ex.owners_min = g.get("owners_min",0)
-                                        ex.owners_max = g.get("owners_max",0)
-                                        ex.positive   = g.get("positive",0)
-                                        ex.negative   = g.get("negative",0)
-                                        ex.price_usd  = int(g.get("price_usd",0) or 0)
-                                    else:
-                                        db.add(Game(
-                                            app_id=g["app_id"], name=g["name"],
-                                            developer=g.get("developer",""), publisher=g.get("publisher",""),
-                                            owners_min=g.get("owners_min",0), owners_max=g.get("owners_max",0),
-                                            players_forever=g.get("players_forever",0),
-                                            average_playtime=g.get("average_playtime",0),
-                                            median_playtime=g.get("median_playtime",0),
-                                            price_usd=int(g.get("price_usd",0) or 0),
-                                            positive=g.get("positive",0), negative=g.get("negative",0),
-                                            tags=g.get("tags",{}),
-                                        ))
-                                    saved += 1
-                            except Exception:
-                                pass
-                    except Exception as e:
-                        stat.text(f"✗ {e}")
-                    prog.progress((i+1)/(len(dl_genres)+1))
-
-                stat.text("Obliczam trendy...")
-                try:
-                    with get_session() as db:
-                        db.query(GenreTrend).delete()
-                        all_g = db.query(Game).filter(Game.owners_max > 0).all()
-                        for game in all_g:
-                            gn = _classify_genre(game.tags or {})
-                            buckets.setdefault(gn, []).append(game)
-                        now = datetime.now(timezone.utc)
-                        for gn, gg in buckets.items():
-                            own = [x.owners_mid for x in gg]
-                            rev = [x.estimated_revenue for x in gg]
-                            rw  = [x.review_score for x in gg if x.positive+x.negative > 0]
-                            db.add(GenreTrend(
-                                genre=gn, recorded_at=now, game_count=len(gg),
-                                avg_owners=int(sum(own)/len(own)) if own else 0,
-                                total_owners=sum(own),
-                                avg_revenue=sum(rev)/len(rev) if rev else 0.0,
-                                avg_review_score=sum(rw)/len(rw) if rw else 0.0,
-                                avg_playtime_h=sum(x.average_playtime/60 for x in gg)/len(gg),
-                                avg_price=sum(x.price_usd for x in gg)/len(gg),
-                            ))
-                except Exception as e:
-                    st.error(f"Błąd: {e}")
-
-                prog.progress(1.0)
-                st.success(f"✅ {saved} gier")
-                st.cache_data.clear()
-                st.rerun()
-
+    st.divider()
     st.caption(f"Gier: **{db_stats['games']:,}**")
     st.caption(f"Trendy: **{db_stats['genre_trends']}**")
+    st.caption(f"Claude: {'✅' if settings.has_anthropic_key else '❌'}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LEWA KOLUMNA — główna treść
+# LEWA KOLUMNA — treść
 # ─────────────────────────────────────────────────────────────────────────────
 with main_col:
     st.markdown("## 🎮 **Drop**Rate &nbsp;<span style='font-size:14px;color:#64748b;font-weight:400'>GameDev Intelligence Platform</span>", unsafe_allow_html=True)
-
-    if sel_count < len(ALL_GENRES):
-        st.caption(f"🔍 Aktywne filtry: {', '.join(st.session_state.selected_genres)}")
-
     st.write("")
 
-    # Dane
-    genre_df = filter_by_genre(load_genre_stats())
-    trend_df = filter_by_genre(load_trend_history(30))
-    top_df   = filter_by_genre(load_top_games())
+    genre_df = load_genre_stats()
+    trend_df = load_trend_history()
+    top_df   = load_top_games()
 
-    # ── TABS ──────────────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 Overview", "📈 Trendy", "🎯 Gatunki", "🔄 Przepływy", "🤖 AI Analyst"
     ])
@@ -282,7 +229,6 @@ with main_col:
     # ═══════════ TAB 1 — OVERVIEW ════════════════════════════════════════════
     with tab1:
         st.markdown("### Market Overview")
-        st.caption(f"Dane przefiltrowane · {len(genre_df)} gatunków")
         st.write("")
 
         c1,c2,c3,c4,c5 = st.columns(5)
@@ -291,7 +237,6 @@ with main_col:
         c3.metric("Rynek indie", "$4.8B", delta="+8.4% r/r")
         c4.metric("Avg hit rate", "2.4%", delta="-0.7%", delta_color="inverse")
         c5.metric("AI adopcja", "67%", delta="+34% r/r")
-
         st.write("")
 
         col_l, col_r = st.columns([3,2], gap="large")
@@ -322,7 +267,6 @@ with main_col:
                 margin=dict(t=5,b=5,l=5,r=5), legend=dict(font=dict(size=10,color="#94a3b8")))
             fig2.update_traces(textinfo="percent", textfont_size=10)
             st.plotly_chart(fig2, use_container_width=True)
-
             if not genre_df.empty:
                 best = genre_df.iloc[0]
                 st.metric("Najlepszy ROI", best["genre"], delta=f"Score: {best['roi_score']:.0f}")
@@ -385,11 +329,11 @@ with main_col:
             "Horror":[45,42,48,55,62,58,56,62,70,78,86,76],
             "Puzzle":[42,38,44,52,58,55,52,58,65,74,82,72],
         }
-        sel_h = [g for g in st.session_state.selected_genres if g in heat_all] or list(heat_all.keys())
-        hd = np.array([heat_all[g] for g in sel_h])
+        hd = np.array(list(heat_all.values()))
         fig3 = px.imshow(hd, labels=dict(x="Miesiąc",y="Gatunek",color="Sprzedaż"),
-            x=months, y=sel_h, color_continuous_scale=[[0,"#1e1b4b"],[1,"#6366f1"]], aspect="auto")
-        fig3.update_layout(**dark_layout(height=max(180, len(sel_h)*50)))
+            x=months, y=list(heat_all.keys()),
+            color_continuous_scale=[[0,"#1e1b4b"],[1,"#6366f1"]], aspect="auto")
+        fig3.update_layout(**dark_layout(height=240))
         st.plotly_chart(fig3, use_container_width=True)
 
     # ═══════════ TAB 3 — GATUNKI ═════════════════════════════════════════════
@@ -440,7 +384,7 @@ with main_col:
             disp.columns = ["Gatunek","Gier","Avg właściciele","Avg przychód","Avg review","Avg cena","ROI"]
             st.dataframe(disp, use_container_width=True, hide_index=True)
         else:
-            st.info("Brak danych dla wybranych filtrów.")
+            st.info("Brak danych.")
 
     # ═══════════ TAB 4 — PRZEPŁYWY ═══════════════════════════════════════════
     with tab4:
@@ -462,15 +406,13 @@ with main_col:
         col1, col2 = st.columns(2, gap="large")
         with col1:
             st.markdown("**Retencja (30 / 90 / 180 dni)**")
-            ret_all = pd.DataFrame({
+            ret = pd.DataFrame({
                 "Gatunek":["Roguelite","Cozy","Survival","Horror","Idle","Puzzle","Visual Novel","Platformer"],
                 "30 dni":[68,75,70,45,80,72,78,65],
                 "90 dni":[42,58,52,28,65,48,55,40],
                 "180 dni":[28,45,38,18,55,32,42,25]
             })
-            ret_f = ret_all[ret_all["Gatunek"].isin(st.session_state.selected_genres)]
-            if ret_f.empty: ret_f = ret_all
-            fig_r = px.bar(ret_f.melt(id_vars="Gatunek",var_name="Okres",value_name="Retencja (%)"),
+            fig_r = px.bar(ret.melt(id_vars="Gatunek",var_name="Okres",value_name="Retencja (%)"),
                 x="Gatunek", y="Retencja (%)", color="Okres", barmode="group",
                 color_discrete_sequence=["#6366f1","#8b5cf6","#c7d2fe"])
             fig_r.update_layout(**dark_layout(height=280))
@@ -480,8 +422,7 @@ with main_col:
             st.markdown("**Kanały pozyskania graczy**")
             acq = pd.DataFrame({"Kanał":["TikTok/Reels","Steam organiczny","Reddit/Discord","YouTube","Influencerzy","Prasa"],
                 "Udział (%)": [34,28,16,12,6,4]})
-            fig_a = px.pie(acq, names="Kanał", values="Udział (%)", hole=0.55,
-                color_discrete_sequence=COLORS)
+            fig_a = px.pie(acq, names="Kanał", values="Udział (%)", hole=0.55, color_discrete_sequence=COLORS)
             fig_a.update_layout(paper_bgcolor=BG, font=FONT, height=280, margin=dict(t=5,b=5))
             fig_a.update_traces(textinfo="percent+label", textfont_size=10)
             st.plotly_chart(fig_a, use_container_width=True)
@@ -497,7 +438,6 @@ with main_col:
             st.stop()
 
         market_ctx = load_market_context()
-        market_ctx["active_genres"] = st.session_state.selected_genres
 
         st.markdown("**Szybkie analizy:**")
         q_cols = st.columns(4)
@@ -517,11 +457,7 @@ with main_col:
         if "messages" not in st.session_state:
             st.session_state.messages = [{
                 "role": "assistant",
-                "content": (
-                    f"Cześć! Jestem DropRate AI. Analizuję "
-                    f"{len(st.session_state.selected_genres)} gatunków. "
-                    "Zapytaj mnie o trendy, ROI, timing premiery lub strategię."
-                ),
+                "content": "Cześć! Jestem DropRate AI. Zapytaj mnie o trendy, ROI, timing premiery lub strategię.",
             }]
 
         for msg in st.session_state.messages:
