@@ -498,28 +498,31 @@ elif page == "⚙️ Dane":
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("Pobierz dane Steam")
-        st.caption("SteamSpy API — publiczne, bez klucza. Throttle: 1 req/s.")
+        st.subheader("Aktualizuj dane")
+        st.caption("Pobiera dane Steam i automatycznie oblicza trendy.")
 
         selected_genres = st.multiselect(
             "Gatunki do pobrania",
             options=list(__import__("scrapers.steam", fromlist=["GENRE_TO_TAG"]).GENRE_TO_TAG.keys()),
             default=["Roguelite", "Cozy", "Survival", "Horror"],
         )
-        pages_per_genre = st.slider("Stron per gatunek (×50 gier)", 1, 5, 1)
 
-        if st.button("🔄 Pobierz dane Steam", use_container_width=True):
+        if st.button("🔄 Aktualizuj dane i trendy", use_container_width=True):
             from scrapers.steam import fetch_genre_data
-            from db.models import Game
+            from db.models import Game, GenreTrend
+            from utils.data_processor import _classify_genre
+            from datetime import datetime, timezone
 
             progress = st.progress(0)
             status = st.empty()
             total_saved = 0
+            steps = len(selected_genres) + 1  # +1 na trendy
 
+            # KROK 1: Pobierz dane Steam
             for i, genre in enumerate(selected_genres):
-                status.text(f"Pobieranie: {genre}...")
+                status.text(f"[{i+1}/{len(selected_genres)}] Pobieranie: {genre}...")
                 try:
-                    games = fetch_genre_data(genre, pages=pages_per_genre)
+                    games = fetch_genre_data(genre, pages=1)
                     for g_data in games:
                         try:
                             with get_session() as db:
@@ -549,14 +552,42 @@ elif page == "⚙️ Dane":
                                 total_saved += 1
                         except Exception:
                             pass
-
-                    status.text(f"✓ {genre}: {len(games)} gier")
                 except Exception as e:
                     status.text(f"✗ {genre}: {e}")
 
-                progress.progress((i + 1) / len(selected_genres))
+                progress.progress((i + 1) / steps)
 
-            st.success(f"✅ Zapisano {total_saved} gier w bazie danych!")
+            # KROK 2: Oblicz trendy
+            status.text("Obliczam trendy gatunków...")
+            try:
+                with get_session() as db:
+                    db.query(GenreTrend).delete()
+                    all_games = db.query(Game).filter(Game.owners_max > 0).all()
+                    genre_buckets = {}
+                    for game in all_games:
+                        genre = _classify_genre(game.tags or {})
+                        genre_buckets.setdefault(genre, []).append(game)
+                    now = datetime.now(timezone.utc)
+                    for genre, genre_games in genre_buckets.items():
+                        owners = [g.owners_mid for g in genre_games]
+                        revenues = [g.estimated_revenue for g in genre_games]
+                        reviews = [g.review_score for g in genre_games if g.positive + g.negative > 0]
+                        db.add(GenreTrend(
+                            genre=genre,
+                            recorded_at=now,
+                            game_count=len(genre_games),
+                            avg_owners=int(sum(owners)/len(owners)) if owners else 0,
+                            total_owners=sum(owners),
+                            avg_revenue=sum(revenues)/len(revenues) if revenues else 0.0,
+                            avg_review_score=sum(reviews)/len(reviews) if reviews else 0.0,
+                            avg_playtime_h=sum(g.average_playtime/60 for g in genre_games)/len(genre_games),
+                            avg_price=sum(g.price_usd for g in genre_games)/len(genre_games),
+                        ))
+            except Exception as e:
+                st.error(f"Błąd trendów: {e}")
+
+            progress.progress(1.0)
+            st.success(f"✅ Gotowe! Pobrano {total_saved} gier, obliczono {len(genre_buckets)} gatunków.")
             st.cache_data.clear()
             st.rerun()
 
@@ -566,44 +597,6 @@ elif page == "⚙️ Dane":
         st.metric("Gier", f"{stats['games']:,}")
         st.metric("Rekordów trendów", stats['genre_trends'])
         st.metric("Raportów AI (cache)", stats['ai_reports'])
-
-        st.divider()
-        st.subheader("Generuj trendy")
-        if st.button("📊 Oblicz snapshot trendów", use_container_width=True):
-            from db.models import Game, GenreTrend
-            from datetime import datetime
-            with st.spinner("Obliczam trendy..."):
-                with get_session() as db:
-                    games = db.query(Game).filter(Game.owners_max > 0).all()
-                    genre_buckets = {}
-                    for game in games:
-                        tags = game.tags or {}
-                        genre = list(tags.keys())[0] if tags else "Other"
-                        genre_buckets.setdefault(genre, []).append(game)
-                    for genre, genre_games in genre_buckets.items():
-                        owners = [g.owners_mid for g in genre_games]
-                        revenues = [g.estimated_revenue for g in genre_games]
-                        reviews = [g.review_score for g in genre_games if g.positive + g.negative > 0]
-                        db.add(GenreTrend(
-                            genre=genre,
-                            recorded_at=datetime.utcnow(),
-                            game_count=len(genre_games),
-                            avg_owners=int(sum(owners)/len(owners)) if owners else 0,
-                            total_owners=sum(owners),
-                            avg_revenue=sum(revenues)/len(revenues) if revenues else 0.0,
-                            avg_review_score=sum(reviews)/len(reviews) if reviews else 0.0,
-                            avg_playtime_h=sum(g.average_playtime/60 for g in genre_games)/len(genre_games),
-                            avg_price=sum(g.price_usd for g in genre_games)/len(genre_games),
-                        ))
-            st.success("✅ Trendy obliczone!")
-            st.cache_data.clear()
-            st.rerun()
-
-        st.divider()
-        st.subheader("Wyczyść cache")
-        if st.button("🗑️ Wyczyść cache Streamlit", use_container_width=True):
-            st.cache_data.clear()
-            st.success("Cache wyczyszczony!")
 
         st.divider()
         st.subheader("Konfiguracja (.env)")
