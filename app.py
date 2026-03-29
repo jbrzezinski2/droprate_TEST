@@ -90,7 +90,12 @@ def initialize():
         seed_genre_trends(30)
     return True
 initialize()
-db_stats = get_db_stats()  # po initialize żeby uwzględnić auto-seed
+
+@st.cache_data(ttl=60)
+def get_fresh_stats():
+    return get_db_stats()
+
+db_stats = get_fresh_stats()
 
 # ── Session State — globalne filtry ──────────────────────────────────────────
 ALL_GENRES = ["Roguelite","Cozy","Survival","Horror","Idle","Puzzle","Visual Novel","Platformer","RPG","Action","Strategy","Simulation"]
@@ -113,12 +118,10 @@ def load_market_context(): return get_market_context()
 def apply_genre_filter(df, col="genre"):
     if df.empty or col not in df.columns:
         return df
-    return df[df[col].isin(st.session_state.selected_genres)]
-
-def apply_roi_filter(df, col="roi_score"):
-    if df.empty or col not in df.columns:
+    sel = st.session_state.get("selected_genres", ALL_GENRES)
+    if not sel:
         return df
-    return df[df[col] >= st.session_state.min_roi]
+    return df[df[col].isin(sel)]
 
 # ── Plotly dark theme ─────────────────────────────────────────────────────────
 BG   = "rgba(0,0,0,0)"
@@ -137,7 +140,6 @@ def dark_layout(**kw):
     return base
 
 # ── HEADER ────────────────────────────────────────────────────────────────────
-db_stats = get_db_stats()
 
 h1, h2 = st.columns([5, 1])
 with h1:
@@ -176,10 +178,9 @@ with st.expander("🔧 Filtry globalne — zmień tu, dane zmieniają się wszę
             st.rerun()
 
 # Załaduj i przefiltruj dane
-raw_genre_df = load_genre_stats()
-genre_df     = apply_genre_filter(raw_genre_df)
-trend_df     = apply_genre_filter(load_trend_history(30))
-top_df       = apply_genre_filter(load_top_games())
+genre_df = apply_genre_filter(load_genre_stats())
+trend_df = apply_genre_filter(load_trend_history(30))
+top_df   = apply_genre_filter(load_top_games())
 
 # Aktywne filtry info
 if len(st.session_state.selected_genres) < len(ALL_GENRES):
@@ -287,7 +288,7 @@ with tab2:
         metric_opt = st.selectbox("Metryka", ["avg_owners","avg_revenue","avg_review"], key="trend_metric",
             format_func=lambda x: {"avg_owners":"Właściciele","avg_revenue":"Przychód ($)","avg_review":"Review (%)"}[x])
         if not trend_df.empty and "recorded_at" in trend_df.columns:
-            filtered_trend = apply_genre_filter(trend_df)
+            filtered_trend = trend_df
             fig = px.line(filtered_trend, x="recorded_at", y=metric_opt, color="genre",
                 color_discrete_sequence=COLORS)
             fig.update_layout(**dark_layout(height=300))
