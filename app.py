@@ -534,44 +534,47 @@ elif page == "⚙️ Dane":
 
             progress = st.progress(0)
             status = st.empty()
+            total_saved = 0
 
-            with get_session() as db:
-                total_saved = 0
-                for i, genre in enumerate(selected_genres):
-                    status.text(f"Pobieranie: {genre}...")
-                    try:
-                        games = fetch_genre_data(genre, pages=pages_per_genre)
-                        for g_data in games:
-                            # Upsert (update or insert)
-                            existing = db.query(Game).filter_by(app_id=g_data["app_id"]).first()
-                            if existing:
-                                for k, v in g_data.items():
-                                    if hasattr(existing, k):
-                                        setattr(existing, k, v)
-                            else:
-                                game = Game(
-                                    app_id=g_data["app_id"],
-                                    name=g_data["name"],
-                                    developer=g_data.get("developer", ""),
-                                    publisher=g_data.get("publisher", ""),
-                                    owners_min=g_data.get("owners_min", 0),
-                                    owners_max=g_data.get("owners_max", 0),
-                                    players_forever=g_data.get("players_forever", 0),
-                                    average_playtime=g_data.get("average_playtime", 0),
-                                    median_playtime=g_data.get("median_playtime", 0),
-                                    price_usd=g_data.get("price_usd", 0.0),
-                                    positive=g_data.get("positive", 0),
-                                    negative=g_data.get("negative", 0),
-                                    tags=g_data.get("tags", {}),
-                                )
-                                db.add(game)
-                            total_saved += 1
+            for i, genre in enumerate(selected_genres):
+                status.text(f"Pobieranie: {genre}...")
+                try:
+                    games = fetch_genre_data(genre, pages=pages_per_genre)
+                    for g_data in games:
+                        try:
+                            with get_session() as db:
+                                existing = db.query(Game).filter_by(app_id=g_data["app_id"]).first()
+                                if existing:
+                                    existing.owners_min = g_data.get("owners_min", 0)
+                                    existing.owners_max = g_data.get("owners_max", 0)
+                                    existing.positive = g_data.get("positive", 0)
+                                    existing.negative = g_data.get("negative", 0)
+                                    existing.price_usd = int(g_data.get("price_usd", 0) or 0)
+                                else:
+                                    db.add(Game(
+                                        app_id=g_data["app_id"],
+                                        name=g_data["name"],
+                                        developer=g_data.get("developer", ""),
+                                        publisher=g_data.get("publisher", ""),
+                                        owners_min=g_data.get("owners_min", 0),
+                                        owners_max=g_data.get("owners_max", 0),
+                                        players_forever=g_data.get("players_forever", 0),
+                                        average_playtime=g_data.get("average_playtime", 0),
+                                        median_playtime=g_data.get("median_playtime", 0),
+                                        price_usd=int(g_data.get("price_usd", 0) or 0),
+                                        positive=g_data.get("positive", 0),
+                                        negative=g_data.get("negative", 0),
+                                        tags=g_data.get("tags", {}),
+                                    ))
+                                total_saved += 1
+                        except Exception:
+                            pass
 
-                        status.text(f"✓ {genre}: {len(games)} gier")
-                    except Exception as e:
-                        status.text(f"✗ {genre}: {e}")
+                    status.text(f"✓ {genre}: {len(games)} gier")
+                except Exception as e:
+                    status.text(f"✗ {genre}: {e}")
 
-                    progress.progress((i + 1) / len(selected_genres))
+                progress.progress((i + 1) / len(selected_genres))
 
             st.success(f"✅ Zapisano {total_saved} gier w bazie danych!")
             st.cache_data.clear()
