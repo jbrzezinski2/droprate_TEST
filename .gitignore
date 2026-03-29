@@ -1,0 +1,21 @@
+# Środowisko
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Baza danych (lokalna)
+*.db
+*.sqlite3
+
+# Klucze API - NIGDY nie wrzucaj na GitHub
+.env
+.streamlit/secrets.toml
+
+# PyCharm
+.idea/
+
+# System
+.DS_Store
+Thumbs.db
