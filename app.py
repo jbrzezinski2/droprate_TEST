@@ -144,6 +144,9 @@ with side_col:
                     for g in games:
                         try:
                             with get_session() as db:
+                                # Gatunek wyszukiwania jako primary tag z najwyższym score
+                                tags = dict(g.get("tags", {}))
+                                tags[genre] = 999999
                                 ex = db.query(Game).filter_by(app_id=g["app_id"]).first()
                                 if ex:
                                     ex.owners_min = g.get("owners_min",0)
@@ -151,6 +154,7 @@ with side_col:
                                     ex.positive   = g.get("positive",0)
                                     ex.negative   = g.get("negative",0)
                                     ex.price_usd  = int(g.get("price_usd",0) or 0)
+                                    ex.tags       = tags
                                 else:
                                     db.add(Game(
                                         app_id=g["app_id"], name=g["name"],
@@ -161,7 +165,7 @@ with side_col:
                                         median_playtime=g.get("median_playtime",0),
                                         price_usd=int(g.get("price_usd",0) or 0),
                                         positive=g.get("positive",0), negative=g.get("negative",0),
-                                        tags=g.get("tags",{}),
+                                        tags=tags,
                                     ))
                                 saved += 1
                         except Exception:
