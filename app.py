@@ -524,11 +524,12 @@ with tab6:
         st.markdown("**Pobierz dane Steam**")
         st.caption("SteamSpy API — publiczne, bez klucza · 1 req/s")
 
+        from scrapers.steam import GENRE_TO_TAG
         dl_genres = st.multiselect(
             "Gatunki do pobrania",
-            options=list(__import__("scrapers.steam", fromlist=["GENRE_TO_TAG"]).GENRE_TO_TAG.keys()),
+            options=list(GENRE_TO_TAG.keys()),
             default=["Roguelite", "Cozy", "Survival", "Horror"],
-            key="dl_genres"
+            key="dl_genres_selector"
         )
 
         if st.button("🔄 Aktualizuj dane i trendy", use_container_width=True):
@@ -536,11 +537,16 @@ with tab6:
             from db.models import Game, GenreTrend
             from datetime import datetime, timezone
 
+            if not dl_genres:
+                st.warning("Wybierz przynajmniej jeden gatunek!")
+                st.stop()
+
             progress = st.progress(0)
             status = st.empty()
             total_saved = 0
             genre_buckets = {}
             steps = len(dl_genres) + 1
+            status.text(f"Start pobierania {len(dl_genres)} gatunków...")
 
             for i, genre in enumerate(dl_genres):
                 status.text(f"[{i+1}/{len(dl_genres)}] Pobieranie: {genre}...")
