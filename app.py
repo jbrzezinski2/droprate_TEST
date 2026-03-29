@@ -212,9 +212,9 @@ if active:
 st.write("")
 
 # ── TABS ──────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Overview", "📈 Trendy", "🎯 Gatunki",
-    "🔄 Przepływy", "🤖 AI Analyst", "⚙️ Dane"
+    "🔄 Przepływy", "🤖 AI Analyst"
 ])
 
 # ═══════════════════════════════ TAB 1 — OVERVIEW ════════════════════════════
@@ -518,121 +518,3 @@ with tab5:
                 report = get_weekly_market_summary(market_ctx)
             st.markdown(report)
 
-# ═══════════════════════════════ TAB 6 — DANE ════════════════════════════════
-with tab6:
-    st.markdown("### Zarządzanie danymi")
-    st.caption("Aktualizacja danych Steam — po pobraniu filtry globalne zastosują się automatycznie")
-    st.write("")
-
-    col1, col2 = st.columns(2, gap="large")
-
-    with col1:
-        st.markdown("**Pobierz dane Steam**")
-        st.caption("SteamSpy API — publiczne, bez klucza · 1 req/s")
-
-        from scrapers.steam import GENRE_TO_TAG
-        dl_genres = st.multiselect(
-            "Gatunki do pobrania",
-            options=list(GENRE_TO_TAG.keys()),
-            default=["Roguelite", "Cozy", "Survival", "Horror"],
-            key="dl_genres_selector"
-        )
-
-        if st.button("🔄 Aktualizuj dane i trendy", use_container_width=True):
-            from scrapers.steam import fetch_genre_data
-            from db.models import Game, GenreTrend
-            from datetime import datetime, timezone
-
-            if not dl_genres:
-                st.warning("Wybierz przynajmniej jeden gatunek!")
-                st.stop()
-
-            progress = st.progress(0)
-            status = st.empty()
-            total_saved = 0
-            genre_buckets = {}
-            steps = len(dl_genres) + 1
-            status.text(f"Start pobierania {len(dl_genres)} gatunków...")
-
-            for i, genre in enumerate(dl_genres):
-                status.text(f"[{i+1}/{len(dl_genres)}] Pobieranie: {genre}...")
-                try:
-                    games = fetch_genre_data(genre, pages=1)
-                    for g_data in games:
-                        try:
-                            with get_session() as db:
-                                existing = db.query(Game).filter_by(app_id=g_data["app_id"]).first()
-                                if existing:
-                                    existing.owners_min = g_data.get("owners_min", 0)
-                                    existing.owners_max = g_data.get("owners_max", 0)
-                                    existing.positive   = g_data.get("positive", 0)
-                                    existing.negative   = g_data.get("negative", 0)
-                                    existing.price_usd  = int(g_data.get("price_usd", 0) or 0)
-                                else:
-                                    db.add(Game(
-                                        app_id=g_data["app_id"], name=g_data["name"],
-                                        developer=g_data.get("developer",""), publisher=g_data.get("publisher",""),
-                                        owners_min=g_data.get("owners_min",0), owners_max=g_data.get("owners_max",0),
-                                        players_forever=g_data.get("players_forever",0),
-                                        average_playtime=g_data.get("average_playtime",0),
-                                        median_playtime=g_data.get("median_playtime",0),
-                                        price_usd=int(g_data.get("price_usd",0) or 0),
-                                        positive=g_data.get("positive",0), negative=g_data.get("negative",0),
-                                        tags=g_data.get("tags",{}),
-                                    ))
-                                total_saved += 1
-                        except Exception:
-                            pass
-                except Exception as e:
-                    status.text(f"✗ {genre}: {e}")
-                progress.progress((i + 1) / steps)
-
-            status.text("Obliczam trendy...")
-            try:
-                with get_session() as db:
-                    db.query(GenreTrend).delete()
-                    all_games = db.query(Game).filter(Game.owners_max > 0).all()
-                    for game in all_games:
-                        g = _classify_genre(game.tags or {})
-                        genre_buckets.setdefault(g, []).append(game)
-                    now = datetime.now(timezone.utc)
-                    for g, gg in genre_buckets.items():
-                        owners   = [x.owners_mid for x in gg]
-                        revenues = [x.estimated_revenue for x in gg]
-                        reviews  = [x.review_score for x in gg if x.positive + x.negative > 0]
-                        db.add(GenreTrend(
-                            genre=g, recorded_at=now, game_count=len(gg),
-                            avg_owners=int(sum(owners)/len(owners)) if owners else 0,
-                            total_owners=sum(owners),
-                            avg_revenue=sum(revenues)/len(revenues) if revenues else 0.0,
-                            avg_review_score=sum(reviews)/len(reviews) if reviews else 0.0,
-                            avg_playtime_h=sum(x.average_playtime/60 for x in gg)/len(gg),
-                            avg_price=sum(x.price_usd for x in gg)/len(gg),
-                        ))
-            except Exception as e:
-                st.error(f"Błąd trendów: {e}")
-
-            progress.progress(1.0)
-            st.success(f"✅ Gotowe! {total_saved} gier · {len(genre_buckets)} gatunków")
-            st.cache_data.clear()
-            st.rerun()
-
-    with col2:
-        st.markdown("**Status systemu**")
-        stats = get_db_stats()
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Gier", f"{stats['games']:,}")
-        m2.metric("Trendy", stats['genre_trends'])
-        m3.metric("AI cache", stats['ai_reports'])
-
-        st.divider()
-        st.markdown("**Aktywne filtry globalne**")
-        st.write(f"Gatunki: **{', '.join(st.session_state.selected_genres)}**")
-        st.write(f"Horyzont: **{st.session_state.days_range} dni**")
-        st.write(f"Min ROI: **{st.session_state.min_roi}**")
-
-        st.divider()
-        st.markdown("**Konfiguracja**")
-        st.text(f"Claude API: {'✅ Aktywny' if settings.has_anthropic_key else '❌ Brak'}")
-        st.text(f"Twitch API: {'✅ Aktywny' if settings.has_twitch_keys else '⚠️ Opcjonalny'}")
-        st.text(f"Środowisko: {settings.app_env}")
