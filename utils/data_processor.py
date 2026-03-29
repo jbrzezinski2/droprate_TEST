@@ -41,24 +41,50 @@ def get_games_df() -> pd.DataFrame:
     } for g in games])
 
 
+# Mapowanie tagów SteamSpy → nasze nazwy gatunków
+TAG_TO_GENRE = {
+    "roguelite": "Roguelite", "roguelike": "Roguelite", "rogue-lite": "Roguelite",
+    "cozy": "Cozy", "farming sim": "Cozy", "wholesome": "Cozy", "relaxing": "Cozy",
+    "survival": "Survival", "crafting": "Survival",
+    "horror": "Horror", "psychological horror": "Horror",
+    "puzzle": "Puzzle", "puzzle-platformer": "Puzzle",
+    "visual novel": "Visual Novel",
+    "idle": "Idle", "idler": "Idle", "incremental": "Idle", "clicker": "Idle",
+    "platformer": "Platformer", "2d platformer": "Platformer", "metroidvania": "Platformer",
+    "rpg": "RPG", "jrpg": "RPG", "action rpg": "RPG",
+    "strategy": "Strategy", "turn-based strategy": "Strategy",
+    "simulation": "Simulation", "management": "Simulation",
+    "action": "Action", "shooter": "Action",
+}
+
+def _classify_genre(tags: dict) -> str:
+    """Mapuje tagi SteamSpy na gatunek. Bierze tag z największą liczbą głosów."""
+    if not tags:
+        return "Other"
+    # Sortuj tagi po liczbie głosów (malejąco)
+    sorted_tags = sorted(tags.items(), key=lambda x: x[1] if isinstance(x[1], int) else 0, reverse=True)
+    for tag_name, _ in sorted_tags:
+        genre = TAG_TO_GENRE.get(tag_name.lower())
+        if genre:
+            return genre
+    return "Other"
+
+
 def get_genre_stats_df() -> pd.DataFrame:
     """
     Agregat statystyk per gatunek.
     Używane do głównych wykresów porównawczych.
     """
     with get_session() as db:
-        # Grupujemy gry po tagu "genre" (przechowywany w JSON tags)
         games = db.query(Game).filter(Game.owners_max > 0).all()
 
     if not games:
-        return _fallback_genre_df()  # dane demonstracyjne gdy baza pusta
+        return _fallback_genre_df()
 
-    # Buduj DF z gier
     rows = []
     for g in games:
         tags = g.tags or {}
-        # Pobierz pierwszy tag jako gatunek (SteamSpy sortuje tagi wg głosów)
-        genre = list(tags.keys())[0] if tags else "Other"
+        genre = _classify_genre(tags)
         rows.append({
             "genre": genre,
             "owners_mid": g.owners_mid,
