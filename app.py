@@ -130,6 +130,13 @@ with side_col:
             saved = 0
             buckets = {}
 
+            # Wyczyść bazę przed pobraniem nowych danych
+            stat.text("Czyszczę bazę danych...")
+            with get_session() as db:
+                from db.models import GenreTrend
+                db.query(GenreTrend).delete()
+                db.query(Game).delete()
+
             for i, genre in enumerate(dl_genres):
                 stat.text(f"{genre}...")
                 try:
