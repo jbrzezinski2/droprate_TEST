@@ -117,19 +117,6 @@ with side_col:
         key="dl_genres"
     )
 
-    if st.button("🌱 Dane demo", use_container_width=True):
-        with st.spinner("Ładuję..."):
-            from utils.seed import seed_games, seed_genre_trends
-            from db.models import Game, GenreTrend
-            with get_session() as db:
-                db.query(GenreTrend).delete()
-                db.query(Game).delete()
-            seed_games(20)
-            seed_genre_trends(30)
-        st.success("✅ Załadowano!")
-        st.cache_data.clear()
-        st.rerun()
-
     if st.button("🔄 Pobierz Steam", use_container_width=True):
         if not dl_genres:
             st.warning("Wybierz gatunki!")
