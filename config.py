@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
 
     # Modele Claude — haiku dla szybkich odpowiedzi, sonnet dla analiz
-    claude_analyst_model: str = "claude-haiku-4-5-20251001"
-    claude_report_model: str  = "claude-sonnet-4-6-20250514"
+    claude_analyst_model: str = "claude-haiku-4-5"
+    claude_report_model: str  = "claude-sonnet-4-5"
     claude_max_tokens: int    = 2048
 
     # ── Twitch / IGDB ───────────────────────────────────────
