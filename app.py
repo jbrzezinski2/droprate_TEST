@@ -109,10 +109,6 @@ with st.sidebar:
     col1.metric("Gry w DB", f"{db_stats['games']:,}")
     col2.metric("Trendy", db_stats['genre_trends'])
 
-    ai_status = "✅ OK" if settings.has_anthropic_key else "❌ Brak klucza"
-    twitch_status = "✅ OK" if settings.has_twitch_keys else "⚠️ Brak"
-    st.caption(f"Claude API: {ai_status}")
-    st.caption(f"Twitch API: {twitch_status}")
 
     st.divider()
     st.caption("Dane: SteamSpy + Steam Store")
@@ -435,15 +431,11 @@ elif page == "🔄 Przepływy graczy":
         st.plotly_chart(fig_acq, use_container_width=True)
 
 
+
 # ── 5. AI ANALYST ───────────────────────────────────────────────────────────
 elif page == "🤖 AI Analyst":
     st.title("🤖 AI Analyst")
     st.caption("Powered by Claude — zadaj pytanie o rynek gamedev")
-
-    if not settings.has_anthropic_key:
-        st.error("⚠️ Brak ANTHROPIC_API_KEY w pliku .env. Dodaj klucz i zrestartuj aplikację.")
-        st.code('ANTHROPIC_API_KEY=sk-ant-...')
-        st.stop()
 
     market_ctx = load_market_context()
 
@@ -456,7 +448,6 @@ elif page == "🤖 AI Analyst":
         "Jak AI obniża koszty produkcji gier?",
         "Jakie są red flags przy wyborze gatunku?",
     ]
-
     for i, (col, q) in enumerate(zip(q_cols, quick_questions)):
         if col.button(q[:30] + "...", key=f"qq_{i}", use_container_width=True):
             st.session_state.setdefault("messages", [])
@@ -464,7 +455,6 @@ elif page == "🤖 AI Analyst":
 
     st.divider()
 
-    # Inicjalizacja historii czatu
     if "messages" not in st.session_state:
         st.session_state.messages = [
             {
@@ -477,31 +467,22 @@ elif page == "🤖 AI Analyst":
             }
         ]
 
-    # Wyświetl historię
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"], avatar="🎮" if msg["role"] == "assistant" else "👤"):
             st.markdown(msg["content"])
 
-    # Input
     if prompt := st.chat_input("Zapytaj o rynek gamedev..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user", avatar="👤"):
             st.markdown(prompt)
-
         with st.chat_message("assistant", avatar="🎮"):
-            # Historia czatu (bez pierwszej wiadomości systemowej)
             history = [
                 m for m in st.session_state.messages[1:-1]
                 if m["role"] in ("user", "assistant")
             ]
-
-            response = st.write_stream(
-                stream_analysis(prompt, history, market_ctx)
-            )
-
+            response = st.write_stream(stream_analysis(prompt, history, market_ctx))
         st.session_state.messages.append({"role": "assistant", "content": response})
 
-    # Weekly report
     st.divider()
     col1, col2 = st.columns([1, 3])
     with col1:
@@ -509,7 +490,6 @@ elif page == "🤖 AI Analyst":
             with st.spinner("Generuję raport tygodniowy..."):
                 report = get_weekly_market_summary(market_ctx)
             st.markdown(report)
-
 
 # ── 6. DANE ─────────────────────────────────────────────────────────────────
 elif page == "⚙️ Dane":
@@ -586,6 +566,38 @@ elif page == "⚙️ Dane":
         st.metric("Gier", f"{stats['games']:,}")
         st.metric("Rekordów trendów", stats['genre_trends'])
         st.metric("Raportów AI (cache)", stats['ai_reports'])
+
+        st.divider()
+        st.subheader("Generuj trendy")
+        if st.button("📊 Oblicz snapshot trendów", use_container_width=True):
+            from db.models import Game, GenreTrend
+            from datetime import datetime
+            with st.spinner("Obliczam trendy..."):
+                with get_session() as db:
+                    games = db.query(Game).filter(Game.owners_max > 0).all()
+                    genre_buckets = {}
+                    for game in games:
+                        tags = game.tags or {}
+                        genre = list(tags.keys())[0] if tags else "Other"
+                        genre_buckets.setdefault(genre, []).append(game)
+                    for genre, genre_games in genre_buckets.items():
+                        owners = [g.owners_mid for g in genre_games]
+                        revenues = [g.estimated_revenue for g in genre_games]
+                        reviews = [g.review_score for g in genre_games if g.positive + g.negative > 0]
+                        db.add(GenreTrend(
+                            genre=genre,
+                            recorded_at=datetime.utcnow(),
+                            game_count=len(genre_games),
+                            avg_owners=int(sum(owners)/len(owners)) if owners else 0,
+                            total_owners=sum(owners),
+                            avg_revenue=sum(revenues)/len(revenues) if revenues else 0.0,
+                            avg_review_score=sum(reviews)/len(reviews) if reviews else 0.0,
+                            avg_playtime_h=sum(g.average_playtime/60 for g in genre_games)/len(genre_games),
+                            avg_price=sum(g.price_usd for g in genre_games)/len(genre_games),
+                        ))
+            st.success("✅ Trendy obliczone!")
+            st.cache_data.clear()
+            st.rerun()
 
         st.divider()
         st.subheader("Wyczyść cache")
