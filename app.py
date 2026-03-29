@@ -59,6 +59,10 @@ section[data-testid="stSidebar"] { display: none !important; }
 """, unsafe_allow_html=True)
 
 # ── Init ──────────────────────────────────────────────────────────────────────
+@st.cache_data(ttl=60)
+def get_fresh_stats():
+    return get_db_stats()
+
 def initialize():
     init_db()
     stats = get_db_stats()
@@ -66,11 +70,6 @@ def initialize():
         from utils.seed import seed_games, seed_genre_trends
         seed_games(20)
         seed_genre_trends(30)
-    return get_db_stats()
-
-@st.cache_data(ttl=60)
-def get_fresh_stats():
-    return get_db_stats()
 
 # ── Cache ─────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=1800)
@@ -98,13 +97,14 @@ def dark_layout(**kw):
 # ══════════════════════════════════════════════════════════════════════════════
 # LAYOUT
 # ══════════════════════════════════════════════════════════════════════════════
+initialize()
+db_stats = get_fresh_stats()
 main_col, side_col = st.columns([5, 1], gap="large")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PRAWY PANEL — tylko zarządzanie danymi
 # ─────────────────────────────────────────────────────────────────────────────
 with side_col:
-    db_stats = get_fresh_stats()
     st.markdown(f"<div style='font-size:11px;color:#64748b;margin-bottom:8px'>🟢 {db_stats['games']:,} gier</div>", unsafe_allow_html=True)
 
     st.markdown("<div class='panel-title'>DANE</div>", unsafe_allow_html=True)
