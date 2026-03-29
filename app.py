@@ -82,6 +82,12 @@ section[data-testid="stSidebar"] { display: none !important; }
 @st.cache_resource
 def initialize():
     init_db()
+    # Auto-seed jeśli baza pusta
+    stats = get_db_stats()
+    if stats["games"] == 0:
+        from utils.seed import seed_games, seed_genre_trends
+        seed_games(20)
+        seed_genre_trends(30)
     return True
 initialize()
 
