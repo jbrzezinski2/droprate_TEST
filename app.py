@@ -138,10 +138,14 @@ GRID = "#1e2130"
 COLORS = ["#6366f1","#8b5cf6","#06b6d4","#10b981","#f59e0b","#ef4444","#ec4899","#84cc16"]
 
 def dark_layout(**kw):
-    return dict(paper_bgcolor=BG, plot_bgcolor=BG, font=FONT,
-        margin=dict(t=10,b=30,l=40,r=10),
-        xaxis=dict(gridcolor=GRID, linecolor=GRID),
-        yaxis=dict(gridcolor=GRID, linecolor=GRID), **kw)
+    base = dict(paper_bgcolor=BG, plot_bgcolor=BG, font=FONT,
+        margin=dict(t=10,b=30,l=40,r=10))
+    if 'xaxis' not in kw:
+        base['xaxis'] = dict(gridcolor=GRID, linecolor=GRID)
+    if 'yaxis' not in kw:
+        base['yaxis'] = dict(gridcolor=GRID, linecolor=GRID)
+    base.update(kw)
+    return base
 
 # ── TABS ──────────────────────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
