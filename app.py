@@ -90,22 +90,20 @@ def initialize():
         seed_genre_trends(30)
     return True
 initialize()
+db_stats = get_db_stats()  # po initialize żeby uwzględnić auto-seed
 
 # ── Session State — globalne filtry ──────────────────────────────────────────
 ALL_GENRES = ["Roguelite","Cozy","Survival","Horror","Idle","Puzzle","Visual Novel","Platformer","RPG","Action","Strategy","Simulation"]
 
 if "selected_genres" not in st.session_state:
     st.session_state.selected_genres = ALL_GENRES
-if "days_range" not in st.session_state:
-    st.session_state.days_range = 30
-if "min_roi" not in st.session_state:
-    st.session_state.min_roi = 0
+
 
 # ── Cache data ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=1800)
 def load_genre_stats(): return get_genre_stats_df()
 @st.cache_data(ttl=1800)
-def load_trend_history(days): return get_trend_history_df(days=days)
+def load_trend_history(days=30): return get_trend_history_df(days=days)
 @st.cache_data(ttl=1800)
 def load_top_games(): return get_top_games_df(limit=20)
 @st.cache_data(ttl=600)
@@ -151,7 +149,7 @@ with h2:
 # GLOBALNY PASEK FILTRÓW — zawsze widoczny
 # ══════════════════════════════════════════════════════════════════════════════
 with st.expander("🔧 Filtry globalne — zmień tu, dane zmieniają się wszędzie", expanded=True):
-    fc1, fc2, fc3, fc4, fc5 = st.columns([3, 1, 1, 1, 1])
+    fc1, fc2, fc3 = st.columns([4, 1, 1])
 
     with fc1:
         new_genres = st.multiselect(
@@ -162,52 +160,30 @@ with st.expander("🔧 Filtry globalne — zmień tu, dane zmieniają się wszę
         )
 
     with fc2:
-        new_days = st.selectbox(
-            "Horyzont czasowy",
-            options=[7, 14, 30, 60, 90],
-            index=[7,14,30,60,90].index(st.session_state.days_range),
-            format_func=lambda x: f"{x} dni",
-        )
-
-    with fc3:
-        new_roi = st.slider("Min ROI Score", 0, 90, st.session_state.min_roi, step=10)
-
-    with fc4:
         st.write("")
         st.write("")
         if st.button("✅ Zastosuj", use_container_width=True):
-            st.session_state.selected_genres = new_genres
-            st.session_state.days_range = new_days
-            st.session_state.min_roi = new_roi
+            st.session_state.selected_genres = new_genres if new_genres else ALL_GENRES
             st.cache_data.clear()
             st.rerun()
 
-    with fc5:
+    with fc3:
         st.write("")
         st.write("")
         if st.button("↺ Reset", use_container_width=True):
             st.session_state.selected_genres = ALL_GENRES
-            st.session_state.days_range = 30
-            st.session_state.min_roi = 0
             st.cache_data.clear()
             st.rerun()
 
 # Załaduj i przefiltruj dane
 raw_genre_df = load_genre_stats()
-genre_df     = apply_roi_filter(apply_genre_filter(raw_genre_df))
-trend_df     = apply_genre_filter(load_trend_history(st.session_state.days_range))
+genre_df     = apply_genre_filter(raw_genre_df)
+trend_df     = apply_genre_filter(load_trend_history(30))
 top_df       = apply_genre_filter(load_top_games())
 
 # Aktywne filtry info
-active = []
 if len(st.session_state.selected_genres) < len(ALL_GENRES):
-    active.append(f"Gatunki: {', '.join(st.session_state.selected_genres)}")
-if st.session_state.min_roi > 0:
-    active.append(f"Min ROI: {st.session_state.min_roi}")
-if st.session_state.days_range != 30:
-    active.append(f"Okres: {st.session_state.days_range} dni")
-if active:
-    st.caption(f"🔍 Aktywne filtry: {' · '.join(active)}")
+    st.caption(f"🔍 Aktywne filtry — Gatunki: {', '.join(st.session_state.selected_genres)}")
 
 st.write("")
 
@@ -220,7 +196,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 # ═══════════════════════════════ TAB 1 — OVERVIEW ════════════════════════════
 with tab1:
     st.markdown("### Market Overview")
-    st.caption(f"Dane przefiltrowane · {len(genre_df)} gatunków · {st.session_state.days_range} dni")
+    st.caption(f"Dane przefiltrowane · {len(genre_df)} gatunków")
     st.write("")
 
     c1,c2,c3,c4,c5 = st.columns(5)
@@ -295,7 +271,7 @@ with tab1:
 # ═══════════════════════════════ TAB 2 — TRENDY ══════════════════════════════
 with tab2:
     st.markdown("### Analiza trendów")
-    st.caption(f"Okres: ostatnie {st.session_state.days_range} dni · {len(st.session_state.selected_genres)} gatunków")
+    st.caption(f"Ostatnie 30 dni · {len(st.session_state.selected_genres)} gatunków")
     st.write("")
 
     # Metryka trendu per gatunek
