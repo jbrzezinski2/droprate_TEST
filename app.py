@@ -145,7 +145,7 @@ with h2:
 # GLOBALNY PASEK FILTRÓW — zawsze widoczny
 # ══════════════════════════════════════════════════════════════════════════════
 with st.expander("🔧 Filtry globalne — zmień tu, dane zmieniają się wszędzie", expanded=True):
-    fc1, fc2, fc3, fc4 = st.columns([3, 1, 1, 1])
+    fc1, fc2, fc3, fc4, fc5 = st.columns([3, 1, 1, 1, 1])
 
     with fc1:
         new_genres = st.multiselect(
@@ -154,10 +154,6 @@ with st.expander("🔧 Filtry globalne — zmień tu, dane zmieniają się wszę
             default=st.session_state.selected_genres,
             key="genre_filter_widget",
         )
-        if new_genres != st.session_state.selected_genres:
-            st.session_state.selected_genres = new_genres
-            st.cache_data.clear()
-            st.rerun()
 
     with fc2:
         new_days = st.selectbox(
@@ -166,21 +162,24 @@ with st.expander("🔧 Filtry globalne — zmień tu, dane zmieniają się wszę
             index=[7,14,30,60,90].index(st.session_state.days_range),
             format_func=lambda x: f"{x} dni",
         )
-        if new_days != st.session_state.days_range:
-            st.session_state.days_range = new_days
-            st.cache_data.clear()
-            st.rerun()
 
     with fc3:
         new_roi = st.slider("Min ROI Score", 0, 90, st.session_state.min_roi, step=10)
-        if new_roi != st.session_state.min_roi:
-            st.session_state.min_roi = new_roi
-            st.rerun()
 
     with fc4:
         st.write("")
         st.write("")
-        if st.button("↺ Reset filtrów", use_container_width=True):
+        if st.button("✅ Zastosuj", use_container_width=True):
+            st.session_state.selected_genres = new_genres
+            st.session_state.days_range = new_days
+            st.session_state.min_roi = new_roi
+            st.cache_data.clear()
+            st.rerun()
+
+    with fc5:
+        st.write("")
+        st.write("")
+        if st.button("↺ Reset", use_container_width=True):
             st.session_state.selected_genres = ALL_GENRES
             st.session_state.days_range = 30
             st.session_state.min_roi = 0
